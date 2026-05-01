@@ -48,7 +48,12 @@ import { toast } from "sonner";
 import { SudokuBoard } from "./board";
 import { NumberPad } from "./number-pad";
 
-const MAX_MISTAKES = 3;
+const MAX_MISTAKES: Record<Difficulty, number> = {
+  easy: 10,
+  medium: 5,
+  hard: 3,
+  expert: 2,
+};
 const MAX_HINTS = 3;
 const BASE_POINTS: Record<Difficulty, number> = {
   easy: 150,
@@ -335,8 +340,8 @@ export function SudokuGame() {
           tone: "negative",
           id: Date.now(),
         });
-        toast.error(`Mistake (${nextMistakes}/${MAX_MISTAKES})`);
-        if (nextMistakes >= MAX_MISTAKES) setLost(true);
+        toast.error(`Mistake (${nextMistakes}/${MAX_MISTAKES[difficulty]})`);
+        if (nextMistakes >= MAX_MISTAKES[difficulty]) setLost(true);
       }
 
       setState({ ...state, board: nextBoard, notes: nextNotes });
@@ -593,9 +598,9 @@ export function SudokuGame() {
             <span className="font-semibold text-foreground">Score {score}</span>
             <span>Hints {MAX_HINTS - hintsUsed}</span>
             <span
-              className={mistakes >= MAX_MISTAKES ? "text-destructive" : undefined}
+              className={mistakes >= MAX_MISTAKES[difficulty] ? "text-destructive" : undefined}
             >
-              Mistakes {mistakes}/{MAX_MISTAKES}
+              Mistakes {mistakes}/{MAX_MISTAKES[difficulty]}
             </span>
           </div>
         </div>
@@ -850,7 +855,7 @@ export function SudokuGame() {
           <DialogHeader>
             <DialogTitle>Out of mistakes</DialogTitle>
             <DialogDescription>
-              You reached the limit of {MAX_MISTAKES} mistakes. Try again?
+              You reached the limit of {MAX_MISTAKES[difficulty]} mistakes. Try again?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
