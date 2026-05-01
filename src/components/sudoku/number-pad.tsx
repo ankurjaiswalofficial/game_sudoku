@@ -10,7 +10,7 @@ type Props = {
 
 export function NumberPad({ counts, onNumber, notesMode }: Props) {
   return (
-    <div className="grid w-full grid-cols-9 gap-1.5 sm:gap-2.5">
+    <div className="grid w-full grid-cols-9 lg:grid-cols-3 gap-1.5 sm:gap-2.5">
       {Array.from({ length: 9 }, (_, i) => i + 1).map((n) => {
         const remaining = 9 - (counts[n] ?? 0);
         const done = remaining <= 0;
@@ -27,6 +27,7 @@ export function NumberPad({ counts, onNumber, notesMode }: Props) {
               "transition-[background-color,color,transform,box-shadow] hover:bg-accent hover:text-accent-foreground active:scale-[0.985]",
               "disabled:pointer-events-none disabled:opacity-35 cursor-pointer",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "rounded-bl-sm rounded-br-sm"
             )}
           >
             {n}

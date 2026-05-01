@@ -323,11 +323,11 @@ export function SudokuGame() {
   }, [placeNumber, erase, undo, paused, won, lost]);
 
   return (
-    <div className="mx-auto flex min-h-svh w-full max-w-[1600px] flex-col gap-3 px-2 py-2 sm:gap-4 sm:px-4 sm:py-4 lg:gap-8 lg:px-6 lg:py-6 xl:px-8">
+    <div className="mx-auto flex min-h-svh w-full max-w-400 flex-col gap-3 px-2 py-2 sm:gap-4 sm:px-4 sm:py-4 lg:gap-8 lg:px-6 lg:py-6 xl:px-8">
       <Toaster position="top-center" richColors />
 
-      <header className="rounded-[calc(var(--radius)*1.2)] border border-border/80 bg-card/88 p-3 shadow-[var(--shell-shadow)] backdrop-blur-xl sm:p-4 lg:p-6">
-        <div className="flex items-start justify-between gap-2">
+      <header className="rounded-[calc(var(--radius)*1.2)] border border-border/80 bg-card/88 p-3 shadow-(--shell-shadow) backdrop-blur-xl sm:p-4 lg:p-6">
+        <div className="flex items-start flex-wrap justify-between gap-2">
           <div className="min-w-0">
             <h1 className="font-heading text-2xl font-semibold tracking-[-0.04em] sm:text-3xl lg:text-[3rem]">
               Sudoku
@@ -412,7 +412,7 @@ export function SudokuGame() {
         </div>
       </header>
 
-      <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start xl:grid-cols-[minmax(0,1fr)_420px]">
         <section className="rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-card/88 p-2 shadow-[var(--shell-shadow)] backdrop-blur-xl sm:p-4 lg:p-5">
           <div className="mx-auto w-full max-w-[min(96vw,760px)]">
             <div className="relative aspect-square w-full">
