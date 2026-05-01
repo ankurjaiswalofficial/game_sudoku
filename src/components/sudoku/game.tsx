@@ -49,6 +49,17 @@ import { NumberPad } from "./number-pad";
 
 const MAX_MISTAKES = 3;
 const MAX_HINTS = 3;
+const BASE_POINTS: Record<Difficulty, number> = {
+  easy: 150,
+  medium: 180,
+  hard: 250,
+  expert: 250,
+};
+const ROW_BONUS = 50;
+const COLUMN_BONUS = 50;
+const BOX_BONUS = 100;
+const COMPLETION_BONUS = 500;
+const HINT_PENALTY = 75;
 
 type GameState = {
   puzzle: Board;
@@ -61,6 +72,7 @@ type GameState = {
 type HistoryEntry = {
   board: Board;
   notes: NotesBoard;
+  score: number;
 };
 
 function buildGiven(puzzle: Board): boolean[][] {
@@ -86,6 +98,67 @@ function formatTime(seconds: number) {
   return `${m}:${s}`;
 }
 
+function isSolvedRow(board: Board, solution: Board, row: number) {
+  return board[row].every((value, col) => value !== 0 && value === solution[row][col]);
+}
+
+function isSolvedColumn(board: Board, solution: Board, col: number) {
+  return board.every((row, rowIndex) => row[col] !== 0 && row[col] === solution[rowIndex][col]);
+}
+
+function isSolvedBox(board: Board, solution: Board, row: number, col: number) {
+  const br = Math.floor(row / 3) * 3;
+  const bc = Math.floor(col / 3) * 3;
+  for (let r = br; r < br + 3; r++) {
+    for (let c = bc; c < bc + 3; c++) {
+      if (board[r][c] === 0 || board[r][c] !== solution[r][c]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function buildScoreBreakdown(
+  previousBoard: Board,
+  nextBoard: Board,
+  solution: Board,
+  row: number,
+  col: number,
+  difficulty: Difficulty,
+) {
+  let points = BASE_POINTS[difficulty];
+  const reasons = [`+${BASE_POINTS[difficulty]} correct move`];
+
+  const rowWasSolved = isSolvedRow(previousBoard, solution, row);
+  const rowNowSolved = isSolvedRow(nextBoard, solution, row);
+  if (!rowWasSolved && rowNowSolved) {
+    points += ROW_BONUS;
+    reasons.push(`+${ROW_BONUS} row complete`);
+  }
+
+  const colWasSolved = isSolvedColumn(previousBoard, solution, col);
+  const colNowSolved = isSolvedColumn(nextBoard, solution, col);
+  if (!colWasSolved && colNowSolved) {
+    points += COLUMN_BONUS;
+    reasons.push(`+${COLUMN_BONUS} column complete`);
+  }
+
+  const boxWasSolved = isSolvedBox(previousBoard, solution, row, col);
+  const boxNowSolved = isSolvedBox(nextBoard, solution, row, col);
+  if (!boxWasSolved && boxNowSolved) {
+    points += BOX_BONUS;
+    reasons.push(`+${BOX_BONUS} box complete`);
+  }
+
+  if (isBoardComplete(nextBoard)) {
+    points += COMPLETION_BONUS;
+    reasons.push(`+${COMPLETION_BONUS} puzzle complete`);
+  }
+
+  return { points, reasons };
+}
+
 export function SudokuGame() {
   const [difficulty, setDifficulty] = useState<Difficulty>("easy");
   const [state, setState] = useState<GameState | null>(null);
@@ -102,6 +175,8 @@ export function SudokuGame() {
   const [generating, setGenerating] = useState(true);
   const [confirmDeleteSession, setConfirmDeleteSession] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [score, setScore] = useState(0);
+  const [lastScoreEvent, setLastScoreEvent] = useState<string | null>(null);
 
   const startGame = useCallback((d: Difficulty) => {
     setGenerating(true);
@@ -111,6 +186,8 @@ export function SudokuGame() {
     setMistakes(0);
     setHintsUsed(0);
     setSeconds(0);
+    setScore(0);
+    setLastScoreEvent(null);
     setPaused(false);
     setWon(false);
     setLost(false);
@@ -127,6 +204,8 @@ export function SudokuGame() {
     setMistakes(0);
     setHintsUsed(0);
     setSeconds(0);
+    setScore(0);
+    setLastScoreEvent(null);
     setPaused(false);
     setWon(false);
     setLost(false);
@@ -175,11 +254,15 @@ export function SudokuGame() {
 
   const pushHistory = useCallback(() => {
     if (!state) return;
-    setHistory((h) => [
+      setHistory((h) => [
       ...h,
-      { board: cloneBoard(state.board), notes: cloneNotes(state.notes) },
+      {
+        board: cloneBoard(state.board),
+        notes: cloneNotes(state.notes),
+        score,
+      },
     ]);
-  }, [state]);
+  }, [score, state]);
 
   const handleSelect = useCallback((row: number, col: number) => {
     setSelected({ row, col });
@@ -226,10 +309,26 @@ export function SudokuGame() {
       }
 
       setState({ ...state, board: nextBoard, notes: nextNotes });
-
-      if (correct && isBoardComplete(nextBoard)) setWon(true);
+      if (correct) {
+        const scoreBreakdown = buildScoreBreakdown(
+          state.board,
+          nextBoard,
+          state.solution,
+          row,
+          col,
+          difficulty,
+        );
+        setScore((current) => current + scoreBreakdown.points);
+        setLastScoreEvent(scoreBreakdown.reasons.join(" · "));
+        toast.success(`+${scoreBreakdown.points} points`, {
+          description: scoreBreakdown.reasons.join(" · "),
+        });
+        if (isBoardComplete(nextBoard)) setWon(true);
+      } else {
+        setLastScoreEvent("No points for incorrect move");
+      }
     },
-    [state, selected, won, lost, paused, mistakes, pushHistory],
+    [state, selected, won, lost, paused, mistakes, pushHistory, difficulty],
   );
 
   const erase = useCallback(() => {
@@ -249,6 +348,8 @@ export function SudokuGame() {
     if (!state || history.length === 0) return;
     const prev = history[history.length - 1];
     setHistory((h) => h.slice(0, -1));
+    setScore(prev.score);
+    setLastScoreEvent("Move undone");
     setState({ ...state, board: prev.board, notes: prev.notes });
   }, [history, state]);
 
@@ -269,8 +370,12 @@ export function SudokuGame() {
     nextBoard[row][col] = state.solution[row][col];
     nextNotes[row][col].clear();
     setHintsUsed((h) => h + 1);
+    setScore((current) => Math.max(0, current - HINT_PENALTY));
+    setLastScoreEvent(`-${HINT_PENALTY} hint used`);
     setState({ ...state, board: nextBoard, notes: nextNotes });
-    toast.success(`Revealed ${state.solution[row][col]}`);
+    toast.success(`Revealed ${state.solution[row][col]}`, {
+      description: `-${HINT_PENALTY} points for using a hint`,
+    });
     if (isBoardComplete(nextBoard)) setWon(true);
   }, [state, selected, won, lost, paused, hintsUsed, pushHistory]);
 
@@ -402,6 +507,7 @@ export function SudokuGame() {
           </Select>
 
           <div className="flex items-center gap-2 text-[0.72rem] text-muted-foreground sm:gap-3 sm:text-sm">
+            <span className="font-semibold text-foreground">Score {score}</span>
             <span>Hints {MAX_HINTS - hintsUsed}</span>
             <span
               className={mistakes >= MAX_MISTAKES ? "text-destructive" : undefined}
@@ -487,6 +593,11 @@ export function SudokuGame() {
               <NumberPad counts={counts} onNumber={placeNumber} notesMode={false} />
             </div>
           )}
+
+          <div className="mt-3 rounded-xl border border-border/80 bg-background/75 px-3 py-2 text-xs text-muted-foreground sm:text-sm lg:hidden">
+            <div className="font-semibold text-foreground">Score: {score}</div>
+            <div className="mt-1">{lastScoreEvent ?? "Make a correct move to earn points."}</div>
+          </div>
         </section>
 
         <aside className="hidden flex-col gap-4 lg:sticky lg:top-6 lg:flex">
@@ -538,6 +649,18 @@ export function SudokuGame() {
             </div>
 
             <div className="flex flex-col gap-3">
+              <div className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3">
+                <div className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Score card
+                </div>
+                <div className="mt-1 text-3xl font-semibold tabular-nums text-foreground">
+                  {score}
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {lastScoreEvent ?? "Make a correct move to start scoring."}
+                </p>
+              </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
@@ -598,7 +721,7 @@ export function SudokuGame() {
           <DialogHeader>
             <DialogTitle>You solved it!</DialogTitle>
             <DialogDescription>
-              {`Difficulty: ${difficulty} · Time: ${formatTime(seconds)} · Mistakes: ${mistakes}`}
+              {`Difficulty: ${difficulty} · Time: ${formatTime(seconds)} · Mistakes: ${mistakes} · Score: ${score}`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
