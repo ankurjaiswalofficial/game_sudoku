@@ -27,7 +27,7 @@ export function SudokuBoard({
 
   return (
     <div
-      className="@container w-full h-full grid grid-cols-9 grid-rows-9 bg-border rounded-xl overflow-hidden ring-1 ring-border shadow-sm"
+      className="@container grid h-full w-full grid-cols-9 grid-rows-9 overflow-hidden rounded-[calc(var(--radius)*1.35)] bg-border ring-1 ring-border shadow-[var(--board-shadow)]"
       role="grid"
       aria-label="Sudoku board"
     >
@@ -71,23 +71,25 @@ export function SudokuBoard({
               aria-label={`Row ${r + 1}, Column ${c + 1}${value ? `, value ${value}` : ", empty"}`}
               aria-selected={!!isSelected}
               className={cn(
-                "relative flex items-center justify-center bg-background outline-none transition-colors",
+                "relative flex items-center justify-center bg-background outline-none transition-[background-color,color,transform,box-shadow] duration-150",
                 "font-medium tabular-nums select-none cursor-pointer",
-                "text-[clamp(1rem,5cqw,2.5rem)] leading-none",
+                "min-h-0 min-w-0 text-[clamp(1.05rem,5cqw,2.85rem)] leading-none sm:text-[clamp(1.15rem,5cqw,3rem)]",
                 borderRight,
                 borderBottom,
-                isPeer && "bg-accent/40",
-                sameNumber && "bg-primary/15",
-                isSelected && "bg-primary/25 ring-2 ring-primary ring-inset z-10",
+                isPeer && "bg-accent/50",
+                sameNumber && "bg-primary/18",
+                isSelected &&
+                  "z-10 bg-primary/24 ring-2 ring-primary ring-inset shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--primary)_65%,white)]",
                 !isGiven && !hasConflict && value !== 0 && "text-primary",
                 isGiven && "text-foreground",
-                hasConflict && "text-destructive bg-destructive/10",
+                hasConflict && "bg-destructive/12 text-destructive",
+                "active:scale-[0.985]",
               )}
             >
               {value !== 0 ? (
                 <span>{value}</span>
               ) : cellNotes.size > 0 ? (
-                <div className="grid grid-cols-3 grid-rows-3 w-full h-full p-[8%] text-[clamp(0.45rem,1.6cqw,0.8rem)] leading-none text-muted-foreground">
+                <div className="grid h-full w-full grid-cols-3 grid-rows-3 p-[7%] text-[clamp(0.45rem,1.65cqw,0.92rem)] leading-none text-muted-foreground sm:text-[clamp(0.5rem,1.65cqw,0.95rem)]">
                   {Array.from({ length: 9 }, (_, i) => i + 1).map((n) => (
                     <div
                       key={n}

@@ -2,7 +2,7 @@ import { SudokuGame } from "@/components/sudoku/game";
 
 export default function Home() {
   return (
-    <main className="h-svh w-svw overflow-hidden bg-background">
+    <main className="min-h-svh bg-background text-foreground">
       <SudokuGame />
     </main>
   );

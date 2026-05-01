@@ -299,157 +299,215 @@ export function SudokuGame() {
   }, [placeNumber, erase, undo, paused, won, lost]);
 
   return (
-    <div className="h-full w-full flex flex-col lg:flex-row gap-3 sm:gap-4 lg:gap-8 p-3 sm:p-5 lg:p-8">
+    <div className="mx-auto flex min-h-svh w-full max-w-[1600px] flex-col gap-4 px-3 py-3 sm:gap-5 sm:px-4 sm:py-4 lg:gap-8 lg:px-6 lg:py-6 xl:px-8">
       <Toaster position="top-center" richColors />
-
-      {/* Board area */}
-      <section className="flex-1 min-h-0 min-w-0 flex items-center justify-center">
-        <div className="relative aspect-square w-full max-w-full max-h-full lg:h-full lg:w-auto">
-          {state && conflicts ? (
-            <SudokuBoard
-              board={state.board}
-              given={state.given}
-              notes={state.notes}
-              conflicts={conflicts}
-              selected={selected}
-              onSelect={handleSelect}
-            />
-          ) : (
-            <div className="w-full h-full rounded-xl border bg-card flex items-center justify-center text-muted-foreground">
-              {generating ? "Generating puzzle…" : "Loading…"}
-            </div>
-          )}
-          {paused && state && (
-            <div className="absolute inset-0 backdrop-blur-md bg-background/70 rounded-xl flex flex-col items-center justify-center gap-3">
-              <p className="text-2xl font-semibold tracking-tight">Paused</p>
-              <Button onClick={() => setPaused(false)}>
-                <Play className="size-4" />
-                Resume
-              </Button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Side panel */}
-      <aside className="lg:w-[360px] xl:w-[400px] flex flex-col gap-3 lg:gap-5 lg:overflow-y-auto shrink-0">
-        {/* Header: title + status */}
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight leading-none">
-              Sudoku
+      <header className="rounded-[calc(var(--radius)*1.5)] border border-border/80 bg-card/85 p-4 shadow-[var(--shell-shadow)] backdrop-blur-xl sm:p-5 lg:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="mb-2 inline-flex rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Session remix
+            </p>
+            <h1 className="font-heading text-3xl font-semibold tracking-[-0.04em] text-balance sm:text-4xl lg:text-5xl">
+              Sudoku that looks different every session and stays readable on every screen.
             </h1>
-            <p className="hidden lg:block text-xs text-muted-foreground mt-1.5">
-              1–9 to place · Arrows to move · N notes · Ctrl+Z undo
+            <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground sm:text-base">
+              Clean contrast, larger tap targets, and a layout that keeps the board centered while the controls stay easy to reach on phones.
             </p>
           </div>
-          <div className="font-mono tabular-nums text-xl lg:text-2xl font-medium">
-            {formatTime(seconds)}
-          </div>
-        </div>
-
-        {/* Difficulty + status row */}
-        <div className="flex items-center gap-2">
-          <Select
-            value={difficulty}
-            onValueChange={(v) => startGame(v as Difficulty)}
-          >
-            <SelectTrigger className="flex-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="easy">Easy</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="hard">Hard</SelectItem>
-              <SelectItem value="expert">Expert</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="New game"
-            onClick={() => startGame(difficulty)}
-          >
-            <RotateCcw className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label={paused ? "Resume" : "Pause"}
-            onClick={() => setPaused((p) => !p)}
-          >
-            {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
-          </Button>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg border bg-card px-3 py-2">
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              Mistakes
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="rounded-2xl border border-border/80 bg-background/70 px-3 py-3 shadow-sm backdrop-blur-sm sm:px-4">
+              <div className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Time
+              </div>
+              <div className="mt-1 font-mono text-xl font-semibold tabular-nums sm:text-2xl">
+                {formatTime(seconds)}
+              </div>
             </div>
-            <div
-              className={
-                "text-base font-semibold tabular-nums " +
-                (mistakes >= MAX_MISTAKES ? "text-destructive" : "")
-              }
-            >
-              {mistakes}/{MAX_MISTAKES}
+            <div className="rounded-2xl border border-border/80 bg-background/70 px-3 py-3 shadow-sm backdrop-blur-sm sm:px-4">
+              <div className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Mistakes
+              </div>
+              <div
+                className={
+                  "mt-1 font-mono text-xl font-semibold tabular-nums sm:text-2xl " +
+                  (mistakes >= MAX_MISTAKES ? "text-destructive" : "")
+                }
+              >
+                {mistakes}/{MAX_MISTAKES}
+              </div>
             </div>
-          </div>
-          <div className="rounded-lg border bg-card px-3 py-2">
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              Hints left
-            </div>
-            <div className="text-base font-semibold tabular-nums">
-              {MAX_HINTS - hintsUsed}
+            <div className="rounded-2xl border border-border/80 bg-background/70 px-3 py-3 shadow-sm backdrop-blur-sm sm:px-4">
+              <div className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Hints
+              </div>
+              <div className="mt-1 font-mono text-xl font-semibold tabular-nums sm:text-2xl">
+                {MAX_HINTS - hintsUsed}
+              </div>
             </div>
           </div>
         </div>
+      </header>
 
-        {/* Action buttons */}
-        <div className="grid grid-cols-4 gap-2">
-          <Button
-            variant="outline"
-            onClick={undo}
-            disabled={history.length === 0}
-            className="flex-col h-auto py-2 gap-1"
-          >
-            <Undo2 className="size-4" />
-            <span className="text-xs">Undo</span>
-          </Button>
-          <Button
-            variant="outline"
-            onClick={erase}
-            className="flex-col h-auto py-2 gap-1"
-          >
-            <Eraser className="size-4" />
-            <span className="text-xs">Erase</span>
-          </Button>
-          <Button
-            variant={notesMode ? "default" : "outline"}
-            onClick={() => setNotesMode((m) => !m)}
-            className="flex-col h-auto py-2 gap-1"
-          >
-            <PencilLine className="size-4" />
-            <span className="text-xs">Notes</span>
-          </Button>
-          <Button
-            variant="outline"
-            onClick={giveHint}
-            disabled={hintsUsed >= MAX_HINTS}
-            className="flex-col h-auto py-2 gap-1"
-          >
-            <Lightbulb className="size-4" />
-            <span className="text-xs">Hint</span>
-          </Button>
-        </div>
+      <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start xl:grid-cols-[minmax(0,1fr)_420px]">
+        <section className="rounded-[calc(var(--radius)*1.6)] border border-border/80 bg-card/85 p-3 shadow-[var(--shell-shadow)] backdrop-blur-xl sm:p-4 lg:p-5">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-heading text-xl font-semibold tracking-[-0.03em] sm:text-2xl">
+                Current board
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Tap a cell, use the keypad, or type 1 to 9. Notes toggle stays available on mobile and keyboard.
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-2 self-start rounded-full border border-border/70 bg-background/75 px-3 py-1.5 text-xs font-medium text-muted-foreground">
+              <span className="size-2 rounded-full bg-primary" />
+              {notesMode ? "Notes mode enabled" : "Direct entry enabled"}
+            </div>
+          </div>
 
-        {/* Number pad */}
-        {state && (
-          <NumberPad counts={counts} onNumber={placeNumber} notesMode={notesMode} />
-        )}
-      </aside>
+          <div className="mx-auto w-full max-w-[min(92vw,760px)]">
+            <div className="relative aspect-square w-full">
+              {state && conflicts ? (
+                <SudokuBoard
+                  board={state.board}
+                  given={state.given}
+                  notes={state.notes}
+                  conflicts={conflicts}
+                  selected={selected}
+                  onSelect={handleSelect}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-background/75 text-base text-muted-foreground shadow-[var(--board-shadow)]">
+                  {generating ? "Generating puzzle..." : "Loading..."}
+                </div>
+              )}
+              {paused && state && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-[calc(var(--radius)*1.35)] bg-background/72 px-6 text-center backdrop-blur-md">
+                  <p className="font-heading text-3xl font-semibold tracking-[-0.04em]">
+                    Paused
+                  </p>
+                  <p className="max-w-xs text-sm text-muted-foreground">
+                    Resume when you are ready. Your current board stays intact.
+                  </p>
+                  <Button size="lg" onClick={() => setPaused(false)}>
+                    <Play className="size-4" />
+                    Resume game
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
+          <div className="rounded-[calc(var(--radius)*1.6)] border border-border/80 bg-card/88 p-4 shadow-[var(--shell-shadow)] backdrop-blur-xl sm:p-5">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Select
+                  value={difficulty}
+                  onValueChange={(v) => startGame(v as Difficulty)}
+                >
+                  <SelectTrigger className="h-11 flex-1 rounded-xl bg-background/75 px-4 text-base">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="easy">Easy</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="hard">Hard</SelectItem>
+                    <SelectItem value="expert">Expert</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="grid grid-cols-2 gap-2 sm:w-[108px]">
+                  <Button
+                    variant="outline"
+                    size="icon-lg"
+                    aria-label="New game"
+                    onClick={() => startGame(difficulty)}
+                    className="rounded-xl bg-background/75"
+                  >
+                    <RotateCcw className="size-5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon-lg"
+                    aria-label={paused ? "Resume" : "Pause"}
+                    onClick={() => setPaused((p) => !p)}
+                    className="rounded-xl bg-background/75"
+                  >
+                    {paused ? <Play className="size-5" /> : <Pause className="size-5" />}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  onClick={undo}
+                  disabled={history.length === 0}
+                  className="h-14 rounded-2xl justify-start gap-3 bg-background/75 px-4 text-left text-sm"
+                >
+                  <Undo2 className="size-5 shrink-0" />
+                  <span>Undo move</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={erase}
+                  className="h-14 rounded-2xl justify-start gap-3 bg-background/75 px-4 text-left text-sm"
+                >
+                  <Eraser className="size-5 shrink-0" />
+                  <span>Clear cell</span>
+                </Button>
+                <Button
+                  variant={notesMode ? "default" : "outline"}
+                  onClick={() => setNotesMode((m) => !m)}
+                  className="h-14 rounded-2xl justify-start gap-3 px-4 text-left text-sm"
+                >
+                  <PencilLine className="size-5 shrink-0" />
+                  <span>Notes mode</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={giveHint}
+                  disabled={hintsUsed >= MAX_HINTS}
+                  className="h-14 rounded-2xl justify-start gap-3 bg-background/75 px-4 text-left text-sm"
+                >
+                  <Lightbulb className="size-5 shrink-0" />
+                  <span>Use hint</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[calc(var(--radius)*1.6)] border border-border/80 bg-card/88 p-4 shadow-[var(--shell-shadow)] backdrop-blur-xl sm:p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-heading text-lg font-semibold tracking-[-0.03em]">
+                  Number pad
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Remaining counts stay visible even on the smallest screens.
+                </p>
+              </div>
+            </div>
+            {state && (
+              <NumberPad
+                counts={counts}
+                onNumber={placeNumber}
+                notesMode={notesMode}
+              />
+            )}
+          </div>
+
+          <div className="rounded-[calc(var(--radius)*1.5)] border border-border/80 bg-card/82 p-4 shadow-[var(--shell-shadow)] backdrop-blur-xl">
+            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Shortcuts
+            </p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              1 to 9 place values, arrow keys move, N toggles notes, Backspace clears, and Ctrl+Z undoes.
+            </p>
+          </div>
+        </aside>
+      </div>
 
       <Dialog open={won} onOpenChange={(o) => !o && setWon(false)}>
         <DialogContent>

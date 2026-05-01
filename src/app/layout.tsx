@@ -1,20 +1,37 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import {
+  JetBrains_Mono,
+  Manrope,
+  Sora,
+  Space_Grotesk,
+} from "next/font/google";
+
+import { SessionTheme } from "@/components/session-theme";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-sans",
+const manrope = Manrope({
+  variable: "--font-manrope",
+  subsets: ["latin"],
+});
+
+const sora = Sora({
+  variable: "--font-sora",
+  subsets: ["latin"],
+});
+
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
   subsets: ["latin"],
 });
 
 const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-mono",
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
   title: "Sudoku",
-  description: "A polished Sudoku game built with Next.js and shadcn/Base UI.",
+  description: "A responsive Sudoku game with a new visual identity every session.",
 };
 
 export default function RootLayout({
@@ -25,9 +42,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${manrope.variable} ${sora.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="h-full overflow-hidden font-sans">{children}</body>
+      <body className="min-h-full font-sans">
+        <SessionTheme />
+        {children}
+      </body>
     </html>
   );
 }
