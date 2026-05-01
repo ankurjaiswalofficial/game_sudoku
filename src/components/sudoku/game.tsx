@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { clearVisualSession, startNewVisualSession } from "@/components/session-theme";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -539,6 +540,7 @@ export function SudokuGame() {
                 {formatTime(seconds)}
               </div>
             </div>
+            <ThemeToggle />
             <Button
               variant="outline"
               size="icon"

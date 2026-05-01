@@ -175,7 +175,8 @@
   --font-heading: var(--font-sora);
 }
 
-.dark {
+.dark,
+:root.dark[data-theme] {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -207,6 +208,13 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --page-gradient:
+    radial-gradient(circle at 0% 0%, oklch(0.28 0.04 250 / 0.6), transparent 32%),
+    radial-gradient(circle at 100% 0%, oklch(0.3 0.05 20 / 0.4), transparent 30%),
+    linear-gradient(160deg, oklch(0.16 0.01 250), oklch(0.12 0.005 250));
+  --page-grid: color-mix(in oklch, var(--foreground) 10%, transparent);
+  --shell-shadow: 0 24px 64px oklch(0 0 0 / 0.5);
+  --board-shadow: 0 16px 40px oklch(0 0 0 / 0.55);
 }
 
 @layer base {
