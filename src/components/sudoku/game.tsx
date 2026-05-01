@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CheckCircle2,
   Eraser,
   Info,
   Lightbulb,
@@ -176,6 +177,8 @@ export function SudokuGame() {
   const [generating, setGenerating] = useState(true);
   const [confirmDeleteSession, setConfirmDeleteSession] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [confirmCheck, setConfirmCheck] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const [score, setScore] = useState(0);
   const [lastScoreEvent, setLastScoreEvent] = useState<string | null>(null);
   const [scoreMarker, setScoreMarker] = useState<{
@@ -200,6 +203,8 @@ export function SudokuGame() {
     setPaused(false);
     setWon(false);
     setLost(false);
+    setRevealed(false);
+    setConfirmCheck(false);
     setTimeout(() => {
       setState(newGame(d));
       setGenerating(false);
@@ -219,6 +224,7 @@ export function SudokuGame() {
     setPaused(false);
     setWon(false);
     setLost(false);
+    setRevealed(false);
     setState({
       ...state,
       board: cloneBoard(state.puzzle),
@@ -286,7 +292,7 @@ export function SudokuGame() {
 
   const placeNumber = useCallback(
     (n: number) => {
-      if (!state || !selected || won || lost || paused) return;
+      if (!state || !selected || won || lost || paused || revealed) return;
       const { row, col } = selected;
       if (state.given[row][col]) return;
 
@@ -358,11 +364,11 @@ export function SudokuGame() {
         if (isBoardComplete(nextBoard)) setWon(true);
       }
     },
-    [state, selected, won, lost, paused, mistakes, pushHistory, difficulty],
+    [state, selected, won, lost, paused, revealed, mistakes, pushHistory, difficulty],
   );
 
   const erase = useCallback(() => {
-    if (!state || !selected || won || lost || paused) return;
+    if (!state || !selected || won || lost || paused || revealed) return;
     const { row, col } = selected;
     if (state.given[row][col]) return;
     if (state.board[row][col] === 0 && state.notes[row][col].size === 0) return;
@@ -372,33 +378,57 @@ export function SudokuGame() {
     nextBoard[row][col] = 0;
     nextNotes[row][col].clear();
     setState({ ...state, board: nextBoard, notes: nextNotes });
-  }, [state, selected, won, lost, paused, pushHistory]);
+  }, [state, selected, won, lost, paused, revealed, pushHistory]);
 
   const undo = useCallback(() => {
-    if (!state || history.length === 0) return;
+    if (!state || history.length === 0 || revealed) return;
     const prev = history[history.length - 1];
     setHistory((h) => h.slice(0, -1));
     setScore(prev.score);
     setLastScoreEvent("Move undone");
     setState({ ...state, board: prev.board, notes: prev.notes });
-  }, [history, state]);
+  }, [history, state, revealed]);
 
   const giveHint = useCallback(() => {
-    if (!state || !selected || won || lost || paused) return;
+    if (!state || won || lost || paused || revealed) return;
     if (hintsUsed >= MAX_HINTS) {
       toast.error("No hints remaining");
       return;
     }
+    if (!selected) {
+      toast.error("Select a cell first to get a hint");
+      return;
+    }
 
     const { row, col } = selected;
-    if (state.given[row][col]) return;
-    if (state.board[row][col] === state.solution[row][col]) return;
+    if (state.given[row][col]) {
+      toast.error("That cell is a given clue");
+      return;
+    }
+    if (state.board[row][col] === state.solution[row][col]) {
+      toast.info("That cell is already correct");
+      return;
+    }
+
+    const value = state.solution[row][col];
 
     pushHistory();
     const nextBoard = cloneBoard(state.board);
     const nextNotes = cloneNotes(state.notes);
-    nextBoard[row][col] = state.solution[row][col];
+    nextBoard[row][col] = value;
     nextNotes[row][col].clear();
+    for (let i = 0; i < 9; i++) {
+      nextNotes[row][i].delete(value);
+      nextNotes[i][col].delete(value);
+    }
+    const br = Math.floor(row / 3) * 3;
+    const bc = Math.floor(col / 3) * 3;
+    for (let r = br; r < br + 3; r++) {
+      for (let c = bc; c < bc + 3; c++) {
+        nextNotes[r][c].delete(value);
+      }
+    }
+
     setHintsUsed((h) => h + 1);
     setScore((current) => Math.max(0, current - HINT_PENALTY));
     setLastScoreEvent(`-${HINT_PENALTY} hint used`);
@@ -410,11 +440,27 @@ export function SudokuGame() {
       id: Date.now(),
     });
     setState({ ...state, board: nextBoard, notes: nextNotes });
-    toast.success(`Revealed ${state.solution[row][col]}`, {
-      description: `-${HINT_PENALTY} points for using a hint`,
+    toast.error(`-${HINT_PENALTY} hint used`, {
+      description: `Revealed ${value} at R${row + 1}C${col + 1}`,
     });
     if (isBoardComplete(nextBoard)) setWon(true);
-  }, [state, selected, won, lost, paused, hintsUsed, pushHistory]);
+  }, [state, selected, won, lost, paused, revealed, hintsUsed, pushHistory]);
+
+  const checkBoard = useCallback(() => {
+    if (!state || revealed) return;
+    setState({
+      ...state,
+      board: cloneBoard(state.solution),
+      notes: emptyNotes(),
+    });
+    setRevealed(true);
+    setPaused(false);
+    setConfirmCheck(false);
+    setLastScoreEvent("Solution revealed — start a new game to keep playing");
+    toast.error("Solution revealed", {
+      description: "You'll need to start a new game to continue playing.",
+    });
+  }, [state, revealed]);
 
   const stateRef = useRef(state);
   useEffect(() => {
@@ -423,7 +469,7 @@ export function SudokuGame() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (paused || won || lost) return;
+      if (paused || won || lost || revealed) return;
       const currentState = stateRef.current;
       if (!currentState) return;
 
@@ -462,7 +508,7 @@ export function SudokuGame() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [placeNumber, erase, undo, paused, won, lost]);
+  }, [placeNumber, erase, undo, paused, won, lost, revealed]);
 
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-400 flex-col gap-3 px-2 py-2 sm:gap-4 sm:px-4 sm:py-4 lg:gap-8 lg:px-6 lg:py-6 xl:px-8">
@@ -593,7 +639,7 @@ export function SudokuGame() {
             <Button
               variant="outline"
               onClick={undo}
-              disabled={history.length === 0}
+              disabled={history.length === 0 || revealed}
               className="h-11 rounded-xl px-1.5 text-[0.7rem]"
             >
               <Undo2 className="size-4" />
@@ -602,6 +648,7 @@ export function SudokuGame() {
             <Button
               variant="outline"
               onClick={erase}
+              disabled={revealed}
               className="h-11 rounded-xl px-1.5 text-[0.7rem]"
             >
               <Eraser className="size-4" />
@@ -610,7 +657,7 @@ export function SudokuGame() {
             <Button
               variant="outline"
               onClick={giveHint}
-              disabled={hintsUsed >= MAX_HINTS}
+              disabled={hintsUsed >= MAX_HINTS || revealed}
               className="h-11 rounded-xl px-1.5 text-[0.7rem]"
             >
               <Lightbulb className="size-4" />
@@ -632,9 +679,21 @@ export function SudokuGame() {
             </div>
           )}
 
-          <div className="mt-3 rounded-xl border border-border/80 bg-background/75 px-3 py-2 text-xs text-muted-foreground sm:text-sm lg:hidden">
-            <div className="font-semibold text-foreground">Score: {score}</div>
-            <div className="mt-1">{lastScoreEvent ?? "Make a correct move to earn points."}</div>
+          <div className="mt-3 flex items-start justify-between gap-2 rounded-xl border border-border/80 bg-background/75 px-3 py-2 text-xs text-muted-foreground sm:text-sm lg:hidden">
+            <div className="min-w-0">
+              <div className="font-semibold text-foreground">Score: {score}</div>
+              <div className="mt-1">{lastScoreEvent ?? "Make a correct move to earn points."}</div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmCheck(true)}
+              disabled={revealed}
+              className="shrink-0 rounded-lg text-[0.7rem]"
+            >
+              <CheckCircle2 className="size-3.5" />
+              Reveal
+            </Button>
           </div>
         </section>
 
@@ -688,11 +747,25 @@ export function SudokuGame() {
 
             <div className="flex flex-col gap-3">
               <div className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3">
-                <div className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Score card
-                </div>
-                <div className="mt-1 text-3xl font-semibold tabular-nums text-foreground">
-                  {score}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Score card
+                    </div>
+                    <div className="mt-1 text-3xl font-semibold tabular-nums text-foreground">
+                      {score}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfirmCheck(true)}
+                    disabled={revealed}
+                    className="shrink-0 rounded-lg"
+                  >
+                    <CheckCircle2 className="size-4" />
+                    Reveal
+                  </Button>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {lastScoreEvent ?? "Make a correct move to start scoring."}
@@ -703,7 +776,7 @@ export function SudokuGame() {
                 <Button
                   variant="outline"
                   onClick={undo}
-                  disabled={history.length === 0}
+                  disabled={history.length === 0 || revealed}
                   className="h-14 rounded-2xl justify-start gap-3 bg-background/75 px-4 text-left text-sm"
                 >
                   <Undo2 className="size-5 shrink-0" />
@@ -712,6 +785,7 @@ export function SudokuGame() {
                 <Button
                   variant="outline"
                   onClick={erase}
+                  disabled={revealed}
                   className="h-14 rounded-2xl justify-start gap-3 bg-background/75 px-4 text-left text-sm"
                 >
                   <Eraser className="size-5 shrink-0" />
@@ -720,7 +794,7 @@ export function SudokuGame() {
                 <Button
                   variant="outline"
                   onClick={giveHint}
-                  disabled={hintsUsed >= MAX_HINTS}
+                  disabled={hintsUsed >= MAX_HINTS || revealed}
                   className="h-14 rounded-2xl justify-start gap-3 bg-background/75 px-4 text-left text-sm"
                 >
                   <Lightbulb className="size-5 shrink-0" />
@@ -807,6 +881,26 @@ export function SudokuGame() {
               Cancel
             </Button>
             <Button onClick={deleteSession}>Delete session</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmCheck}
+        onOpenChange={(o) => !o && setConfirmCheck(false)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reveal the full solution?</DialogTitle>
+            <DialogDescription>
+              The board will be filled with every correct answer. You won&apos;t be able to keep playing this puzzle — start a new game to continue.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmCheck(false)}>
+              Cancel
+            </Button>
+            <Button onClick={checkBoard}>Reveal solution</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
