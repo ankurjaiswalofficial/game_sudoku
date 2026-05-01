@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Eraser,
+  Info,
   Lightbulb,
   Pause,
-  PencilLine,
   Play,
   RotateCcw,
+  Trash2,
   Undo2,
 } from "lucide-react";
 
+import { clearVisualSession, startNewVisualSession } from "@/components/session-theme";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,10 +30,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Toaster } from "@/components/ui/sonner";
-import { toast } from "sonner";
-
-import { SudokuBoard } from "./board";
-import { NumberPad } from "./number-pad";
 import {
   cloneBoard,
   cloneNotes,
@@ -44,6 +42,10 @@ import {
   type Difficulty,
   type NotesBoard,
 } from "@/lib/sudoku";
+import { toast } from "sonner";
+
+import { SudokuBoard } from "./board";
+import { NumberPad } from "./number-pad";
 
 const MAX_MISTAKES = 3;
 const MAX_HINTS = 3;
@@ -90,7 +92,6 @@ export function SudokuGame() {
   const [selected, setSelected] = useState<{ row: number; col: number } | null>(
     null,
   );
-  const [notesMode, setNotesMode] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [mistakes, setMistakes] = useState(0);
   const [hintsUsed, setHintsUsed] = useState(0);
@@ -99,12 +100,13 @@ export function SudokuGame() {
   const [won, setWon] = useState(false);
   const [lost, setLost] = useState(false);
   const [generating, setGenerating] = useState(true);
+  const [confirmDeleteSession, setConfirmDeleteSession] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const startGame = useCallback((d: Difficulty) => {
     setGenerating(true);
     setDifficulty(d);
     setSelected(null);
-    setNotesMode(false);
     setHistory([]);
     setMistakes(0);
     setHintsUsed(0);
@@ -117,6 +119,37 @@ export function SudokuGame() {
       setGenerating(false);
     }, 30);
   }, []);
+
+  const clearBoard = useCallback(() => {
+    if (!state) return;
+    setHistory([]);
+    setSelected(null);
+    setMistakes(0);
+    setHintsUsed(0);
+    setSeconds(0);
+    setPaused(false);
+    setWon(false);
+    setLost(false);
+    setState({
+      ...state,
+      board: cloneBoard(state.puzzle),
+      notes: emptyNotes(),
+    });
+    toast.success("Board cleared");
+  }, [state]);
+
+  const startNewSession = useCallback(() => {
+    startNewVisualSession();
+    startGame(difficulty);
+    toast.success("Started a new session");
+  }, [difficulty, startGame]);
+
+  const deleteSession = useCallback(() => {
+    clearVisualSession();
+    setConfirmDeleteSession(false);
+    startGame("easy");
+    toast.success("Session deleted");
+  }, [startGame]);
 
   const initRef = useRef(false);
   useEffect(() => {
@@ -148,8 +181,8 @@ export function SudokuGame() {
     ]);
   }, [state]);
 
-  const handleSelect = useCallback((r: number, c: number) => {
-    setSelected({ row: r, col: c });
+  const handleSelect = useCallback((row: number, col: number) => {
+    setSelected({ row, col });
   }, []);
 
   const placeNumber = useCallback(
@@ -157,17 +190,6 @@ export function SudokuGame() {
       if (!state || !selected || won || lost || paused) return;
       const { row, col } = selected;
       if (state.given[row][col]) return;
-
-      if (notesMode) {
-        if (state.board[row][col] !== 0) return;
-        pushHistory();
-        const nextNotes = cloneNotes(state.notes);
-        const cellNotes = nextNotes[row][col];
-        if (cellNotes.has(n)) cellNotes.delete(n);
-        else cellNotes.add(n);
-        setState({ ...state, notes: nextNotes });
-        return;
-      }
 
       if (state.board[row][col] === n) {
         pushHistory();
@@ -207,7 +229,7 @@ export function SudokuGame() {
 
       if (correct && isBoardComplete(nextBoard)) setWon(true);
     },
-    [state, selected, notesMode, won, lost, paused, mistakes, pushHistory],
+    [state, selected, won, lost, paused, mistakes, pushHistory],
   );
 
   const erase = useCallback(() => {
@@ -224,7 +246,7 @@ export function SudokuGame() {
   }, [state, selected, won, lost, paused, pushHistory]);
 
   const undo = useCallback(() => {
-    if (history.length === 0 || !state) return;
+    if (!state || history.length === 0) return;
     const prev = history[history.length - 1];
     setHistory((h) => h.slice(0, -1));
     setState({ ...state, board: prev.board, notes: prev.notes });
@@ -236,9 +258,11 @@ export function SudokuGame() {
       toast.error("No hints remaining");
       return;
     }
+
     const { row, col } = selected;
     if (state.given[row][col]) return;
     if (state.board[row][col] === state.solution[row][col]) return;
+
     pushHistory();
     const nextBoard = cloneBoard(state.board);
     const nextNotes = cloneNotes(state.notes);
@@ -254,11 +278,13 @@ export function SudokuGame() {
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (paused || won || lost) return;
-      const s = stateRef.current;
-      if (!s) return;
+      const currentState = stateRef.current;
+      if (!currentState) return;
+
       if (e.key >= "1" && e.key <= "9") {
         e.preventDefault();
         placeNumber(parseInt(e.key, 10));
@@ -269,103 +295,126 @@ export function SudokuGame() {
         erase();
         return;
       }
-      if (e.key.toLowerCase() === "n") {
-        setNotesMode((m) => !m);
-        return;
-      }
       if (e.key.toLowerCase() === "z" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         undo();
         return;
       }
-      if (
-        ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)
-      ) {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
         setSelected((cur) => {
-          const c = cur ?? { row: 0, col: 0 };
-          if (e.key === "ArrowUp")
-            return { row: Math.max(0, c.row - 1), col: c.col };
-          if (e.key === "ArrowDown")
-            return { row: Math.min(8, c.row + 1), col: c.col };
-          if (e.key === "ArrowLeft")
-            return { row: c.row, col: Math.max(0, c.col - 1) };
-          return { row: c.row, col: Math.min(8, c.col + 1) };
+          const cell = cur ?? { row: 0, col: 0 };
+          if (e.key === "ArrowUp") {
+            return { row: Math.max(0, cell.row - 1), col: cell.col };
+          }
+          if (e.key === "ArrowDown") {
+            return { row: Math.min(8, cell.row + 1), col: cell.col };
+          }
+          if (e.key === "ArrowLeft") {
+            return { row: cell.row, col: Math.max(0, cell.col - 1) };
+          }
+          return { row: cell.row, col: Math.min(8, cell.col + 1) };
         });
       }
     };
+
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [placeNumber, erase, undo, paused, won, lost]);
 
   return (
-    <div className="mx-auto flex min-h-svh w-full max-w-[1600px] flex-col gap-4 px-3 py-3 sm:gap-5 sm:px-4 sm:py-4 lg:gap-8 lg:px-6 lg:py-6 xl:px-8">
+    <div className="mx-auto flex min-h-svh w-full max-w-[1600px] flex-col gap-3 px-2 py-2 sm:gap-4 sm:px-4 sm:py-4 lg:gap-8 lg:px-6 lg:py-6 xl:px-8">
       <Toaster position="top-center" richColors />
-      <header className="rounded-[calc(var(--radius)*1.5)] border border-border/80 bg-card/85 p-4 shadow-[var(--shell-shadow)] backdrop-blur-xl sm:p-5 lg:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="mb-2 inline-flex rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Session remix
-            </p>
-            <h1 className="font-heading text-3xl font-semibold tracking-[-0.04em] text-balance sm:text-4xl lg:text-5xl">
-              Sudoku that looks different every session and stays readable on every screen.
+
+      <header className="rounded-[calc(var(--radius)*1.2)] border border-border/80 bg-card/88 p-3 shadow-[var(--shell-shadow)] backdrop-blur-xl sm:p-4 lg:p-6">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="font-heading text-2xl font-semibold tracking-[-0.04em] sm:text-3xl lg:text-[3rem]">
+              Sudoku
             </h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground sm:text-base">
-              Clean contrast, larger tap targets, and a layout that keeps the board centered while the controls stay easy to reach on phones.
+            <p className="mt-1 text-xs text-muted-foreground sm:text-sm lg:text-base">
+              Board first. Controls below. Clear on every screen.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
-            <div className="rounded-2xl border border-border/80 bg-background/70 px-3 py-3 shadow-sm backdrop-blur-sm sm:px-4">
-              <div className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <div className="rounded-xl border border-border/80 bg-background/75 px-2.5 py-1.5 text-center shadow-sm sm:px-3">
+              <div className="text-[0.55rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Time
               </div>
-              <div className="mt-1 font-mono text-xl font-semibold tabular-nums sm:text-2xl">
+              <div className="font-mono text-sm font-semibold tabular-nums sm:text-base">
                 {formatTime(seconds)}
               </div>
             </div>
-            <div className="rounded-2xl border border-border/80 bg-background/70 px-3 py-3 shadow-sm backdrop-blur-sm sm:px-4">
-              <div className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Mistakes
-              </div>
-              <div
-                className={
-                  "mt-1 font-mono text-xl font-semibold tabular-nums sm:text-2xl " +
-                  (mistakes >= MAX_MISTAKES ? "text-destructive" : "")
-                }
-              >
-                {mistakes}/{MAX_MISTAKES}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border/80 bg-background/70 px-3 py-3 shadow-sm backdrop-blur-sm sm:px-4">
-              <div className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Hints
-              </div>
-              <div className="mt-1 font-mono text-xl font-semibold tabular-nums sm:text-2xl">
-                {MAX_HINTS - hintsUsed}
-              </div>
-            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Open instructions"
+              onClick={() => setShowHelp(true)}
+              className="rounded-xl bg-background/75"
+            >
+              <Info className="size-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Start new session"
+              onClick={startNewSession}
+              className="rounded-xl bg-background/75"
+            >
+              <RotateCcw className="size-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label={paused ? "Resume game" : "Pause game"}
+              onClick={() => setPaused((p) => !p)}
+              className="rounded-xl bg-background/75"
+            >
+              {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Delete session"
+              onClick={() => setConfirmDeleteSession(true)}
+              className="rounded-xl bg-background/75"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <Select
+            value={difficulty}
+            onValueChange={(v) => startGame(v as Difficulty)}
+          >
+            <SelectTrigger className="h-9 min-w-[128px] rounded-xl bg-background/75 px-3 text-sm sm:h-10 sm:text-base">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="easy">Easy</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="hard">Hard</SelectItem>
+              <SelectItem value="expert">Expert</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <div className="flex items-center gap-2 text-[0.72rem] text-muted-foreground sm:gap-3 sm:text-sm">
+            <span>Hints {MAX_HINTS - hintsUsed}</span>
+            <span
+              className={mistakes >= MAX_MISTAKES ? "text-destructive" : undefined}
+            >
+              Mistakes {mistakes}/{MAX_MISTAKES}
+            </span>
           </div>
         </div>
       </header>
 
       <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start xl:grid-cols-[minmax(0,1fr)_420px]">
-        <section className="rounded-[calc(var(--radius)*1.6)] border border-border/80 bg-card/85 p-3 shadow-[var(--shell-shadow)] backdrop-blur-xl sm:p-4 lg:p-5">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="font-heading text-xl font-semibold tracking-[-0.03em] sm:text-2xl">
-                Current board
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                Tap a cell, use the keypad, or type 1 to 9. Notes toggle stays available on mobile and keyboard.
-              </p>
-            </div>
-            <div className="inline-flex items-center gap-2 self-start rounded-full border border-border/70 bg-background/75 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-              <span className="size-2 rounded-full bg-primary" />
-              {notesMode ? "Notes mode enabled" : "Direct entry enabled"}
-            </div>
-          </div>
-
-          <div className="mx-auto w-full max-w-[min(92vw,760px)]">
+        <section className="rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-card/88 p-2 shadow-[var(--shell-shadow)] backdrop-blur-xl sm:p-4 lg:p-5">
+          <div className="mx-auto w-full max-w-[min(96vw,760px)]">
             <div className="relative aspect-square w-full">
               {state && conflicts ? (
                 <SudokuBoard
@@ -381,64 +430,114 @@ export function SudokuGame() {
                   {generating ? "Generating puzzle..." : "Loading..."}
                 </div>
               )}
+
               {paused && state && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-[calc(var(--radius)*1.35)] bg-background/72 px-6 text-center backdrop-blur-md">
                   <p className="font-heading text-3xl font-semibold tracking-[-0.04em]">
                     Paused
                   </p>
-                  <p className="max-w-xs text-sm text-muted-foreground">
-                    Resume when you are ready. Your current board stays intact.
-                  </p>
                   <Button size="lg" onClick={() => setPaused(false)}>
                     <Play className="size-4" />
-                    Resume game
+                    Resume
                   </Button>
                 </div>
               )}
             </div>
           </div>
+
+          <div className="mt-3 grid grid-cols-4 gap-2 lg:hidden">
+            <Button
+              variant="outline"
+              onClick={undo}
+              disabled={history.length === 0}
+              className="h-11 rounded-xl px-1.5 text-[0.7rem]"
+            >
+              <Undo2 className="size-4" />
+              Undo
+            </Button>
+            <Button
+              variant="outline"
+              onClick={erase}
+              className="h-11 rounded-xl px-1.5 text-[0.7rem]"
+            >
+              <Eraser className="size-4" />
+              Clear
+            </Button>
+            <Button
+              variant="outline"
+              onClick={giveHint}
+              disabled={hintsUsed >= MAX_HINTS}
+              className="h-11 rounded-xl px-1.5 text-[0.7rem]"
+            >
+              <Lightbulb className="size-4" />
+              Hint
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => startGame(difficulty)}
+              className="h-11 rounded-xl px-1.5 text-[0.7rem]"
+            >
+              <RotateCcw className="size-4" />
+              Restart
+            </Button>
+          </div>
+
+          {state && (
+            <div className="mt-3 lg:hidden">
+              <NumberPad counts={counts} onNumber={placeNumber} notesMode={false} />
+            </div>
+          )}
         </section>
 
-        <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
+        <aside className="hidden flex-col gap-4 lg:sticky lg:top-6 lg:flex">
           <div className="rounded-[calc(var(--radius)*1.6)] border border-border/80 bg-card/88 p-4 shadow-[var(--shell-shadow)] backdrop-blur-xl sm:p-5">
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Select
-                  value={difficulty}
-                  onValueChange={(v) => startGame(v as Difficulty)}
-                >
-                  <SelectTrigger className="h-11 flex-1 rounded-xl bg-background/75 px-4 text-base">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="easy">Easy</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="hard">Hard</SelectItem>
-                    <SelectItem value="expert">Expert</SelectItem>
-                  </SelectContent>
-                </Select>
-                <div className="grid grid-cols-2 gap-2 sm:w-[108px]">
-                  <Button
-                    variant="outline"
-                    size="icon-lg"
-                    aria-label="New game"
-                    onClick={() => startGame(difficulty)}
-                    className="rounded-xl bg-background/75"
-                  >
-                    <RotateCcw className="size-5" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon-lg"
-                    aria-label={paused ? "Resume" : "Pause"}
-                    onClick={() => setPaused((p) => !p)}
-                    className="rounded-xl bg-background/75"
-                  >
-                    {paused ? <Play className="size-5" /> : <Pause className="size-5" />}
-                  </Button>
-                </div>
-              </div>
+            <div className="mb-4">
+              <h3 className="font-heading text-lg font-semibold tracking-[-0.03em]">
+                Session
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Start fresh, clear your entries, or remove the current session.
+              </p>
+            </div>
 
+            <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Button
+                onClick={startNewSession}
+                className="h-12 rounded-2xl justify-start gap-3 px-4 text-sm"
+              >
+                <RotateCcw className="size-5 shrink-0" />
+                <span>New session</span>
+              </Button>
+              <Button
+                variant="outline"
+                onClick={clearBoard}
+                className="h-12 rounded-2xl justify-start gap-3 bg-background/75 px-4 text-sm"
+              >
+                <Eraser className="size-5 shrink-0" />
+                <span>Clear board</span>
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setConfirmDeleteSession(true)}
+                className="h-12 rounded-2xl justify-start gap-3 bg-background/75 px-4 text-sm sm:col-span-2"
+              >
+                <Trash2 className="size-5 shrink-0" />
+                <span>Delete session</span>
+              </Button>
+            </div>
+
+            <div className="h-px bg-border/80" />
+
+            <div className="my-4">
+              <h3 className="font-heading text-lg font-semibold tracking-[-0.03em]">
+                Actions
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Manage the current puzzle from here.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
@@ -458,14 +557,6 @@ export function SudokuGame() {
                   <span>Clear cell</span>
                 </Button>
                 <Button
-                  variant={notesMode ? "default" : "outline"}
-                  onClick={() => setNotesMode((m) => !m)}
-                  className="h-14 rounded-2xl justify-start gap-3 px-4 text-left text-sm"
-                >
-                  <PencilLine className="size-5 shrink-0" />
-                  <span>Notes mode</span>
-                </Button>
-                <Button
                   variant="outline"
                   onClick={giveHint}
                   disabled={hintsUsed >= MAX_HINTS}
@@ -474,37 +565,30 @@ export function SudokuGame() {
                   <Lightbulb className="size-5 shrink-0" />
                   <span>Use hint</span>
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => startGame(difficulty)}
+                  className="h-14 rounded-2xl justify-start gap-3 bg-background/75 px-4 text-left text-sm"
+                >
+                  <RotateCcw className="size-5 shrink-0" />
+                  <span>Restart game</span>
+                </Button>
               </div>
             </div>
           </div>
 
           <div className="rounded-[calc(var(--radius)*1.6)] border border-border/80 bg-card/88 p-4 shadow-[var(--shell-shadow)] backdrop-blur-xl sm:p-5">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <h3 className="font-heading text-lg font-semibold tracking-[-0.03em]">
-                  Number pad
-                </h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Remaining counts stay visible even on the smallest screens.
-                </p>
-              </div>
+            <div className="mb-3">
+              <h3 className="font-heading text-lg font-semibold tracking-[-0.03em]">
+                Enter numbers
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Tap a number below to place it in the selected cell.
+              </p>
             </div>
             {state && (
-              <NumberPad
-                counts={counts}
-                onNumber={placeNumber}
-                notesMode={notesMode}
-              />
+              <NumberPad counts={counts} onNumber={placeNumber} notesMode={false} />
             )}
-          </div>
-
-          <div className="rounded-[calc(var(--radius)*1.5)] border border-border/80 bg-card/82 p-4 shadow-[var(--shell-shadow)] backdrop-blur-xl">
-            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Shortcuts
-            </p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              1 to 9 place values, arrow keys move, N toggles notes, Backspace clears, and Ctrl+Z undoes.
-            </p>
           </div>
         </aside>
       </div>
@@ -539,6 +623,43 @@ export function SudokuGame() {
               Review board
             </Button>
             <Button onClick={() => startGame(difficulty)}>New game</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmDeleteSession}
+        onOpenChange={(o) => !o && setConfirmDeleteSession(false)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete current session?</DialogTitle>
+            <DialogDescription>
+              This will remove the current session state, reset the theme, and start a new easy game.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDeleteSession(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={deleteSession}>Delete session</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showHelp} onOpenChange={(o) => !o && setShowHelp(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Instructions</DialogTitle>
+            <DialogDescription>
+              Select a cell on the board and then choose a number from the row below. Use Undo to go back, Clear to remove a value, Hint to reveal one value, and Restart to begin the current puzzle again.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowHelp(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
