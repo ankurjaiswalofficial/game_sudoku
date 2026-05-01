@@ -60,6 +60,7 @@ const COLUMN_BONUS = 50;
 const BOX_BONUS = 100;
 const COMPLETION_BONUS = 500;
 const HINT_PENALTY = 75;
+const WRONG_MOVE_PENALTY = 30;
 
 type GameState = {
   puzzle: Board;
@@ -177,6 +178,13 @@ export function SudokuGame() {
   const [showHelp, setShowHelp] = useState(false);
   const [score, setScore] = useState(0);
   const [lastScoreEvent, setLastScoreEvent] = useState<string | null>(null);
+  const [scoreMarker, setScoreMarker] = useState<{
+    row: number;
+    col: number;
+    label: string;
+    tone: "positive" | "negative";
+    id: number;
+  } | null>(null);
 
   const startGame = useCallback((d: Difficulty) => {
     setGenerating(true);
@@ -188,6 +196,7 @@ export function SudokuGame() {
     setSeconds(0);
     setScore(0);
     setLastScoreEvent(null);
+    setScoreMarker(null);
     setPaused(false);
     setWon(false);
     setLost(false);
@@ -206,6 +215,7 @@ export function SudokuGame() {
     setSeconds(0);
     setScore(0);
     setLastScoreEvent(null);
+    setScoreMarker(null);
     setPaused(false);
     setWon(false);
     setLost(false);
@@ -242,6 +252,12 @@ export function SudokuGame() {
     const id = window.setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => window.clearInterval(id);
   }, [state, paused, won, lost]);
+
+  useEffect(() => {
+    if (!scoreMarker) return;
+    const id = window.setTimeout(() => setScoreMarker(null), 1100);
+    return () => window.clearTimeout(id);
+  }, [scoreMarker]);
 
   const conflicts = useMemo(
     () => (state ? getConflicts(state.board) : null),
@@ -304,6 +320,15 @@ export function SudokuGame() {
       if (!correct) {
         const nextMistakes = mistakes + 1;
         setMistakes(nextMistakes);
+        setScore((current) => Math.max(0, current - WRONG_MOVE_PENALTY));
+        setLastScoreEvent(`-${WRONG_MOVE_PENALTY} wrong move`);
+        setScoreMarker({
+          row,
+          col,
+          label: `-${WRONG_MOVE_PENALTY}`,
+          tone: "negative",
+          id: Date.now(),
+        });
         toast.error(`Mistake (${nextMistakes}/${MAX_MISTAKES})`);
         if (nextMistakes >= MAX_MISTAKES) setLost(true);
       }
@@ -320,12 +345,17 @@ export function SudokuGame() {
         );
         setScore((current) => current + scoreBreakdown.points);
         setLastScoreEvent(scoreBreakdown.reasons.join(" · "));
+        setScoreMarker({
+          row,
+          col,
+          label: `+${scoreBreakdown.points}`,
+          tone: "positive",
+          id: Date.now(),
+        });
         toast.success(`+${scoreBreakdown.points} points`, {
           description: scoreBreakdown.reasons.join(" · "),
         });
         if (isBoardComplete(nextBoard)) setWon(true);
-      } else {
-        setLastScoreEvent("No points for incorrect move");
       }
     },
     [state, selected, won, lost, paused, mistakes, pushHistory, difficulty],
@@ -372,6 +402,13 @@ export function SudokuGame() {
     setHintsUsed((h) => h + 1);
     setScore((current) => Math.max(0, current - HINT_PENALTY));
     setLastScoreEvent(`-${HINT_PENALTY} hint used`);
+    setScoreMarker({
+      row,
+      col,
+      label: `-${HINT_PENALTY}`,
+      tone: "negative",
+      id: Date.now(),
+    });
     setState({ ...state, board: nextBoard, notes: nextNotes });
     toast.success(`Revealed ${state.solution[row][col]}`, {
       description: `-${HINT_PENALTY} points for using a hint`,
@@ -529,6 +566,7 @@ export function SudokuGame() {
                   notes={state.notes}
                   conflicts={conflicts}
                   selected={selected}
+                  scoreMarker={scoreMarker}
                   onSelect={handleSelect}
                 />
               ) : (

@@ -9,6 +9,15 @@ type Props = {
   notes: NotesBoard;
   conflicts: boolean[][];
   selected: { row: number; col: number } | null;
+  scoreMarker:
+    | {
+        row: number;
+        col: number;
+        label: string;
+        tone: "positive" | "negative";
+        id: number;
+      }
+    | null;
   onSelect: (row: number, col: number) => void;
 };
 
@@ -18,6 +27,7 @@ export function SudokuBoard({
   notes,
   conflicts,
   selected,
+  scoreMarker,
   onSelect,
 }: Props) {
   const selectedValue =
@@ -99,6 +109,21 @@ export function SudokuBoard({
                     </div>
                   ))}
                 </div>
+              ) : null}
+              {scoreMarker &&
+              scoreMarker.row === r &&
+              scoreMarker.col === c ? (
+                <span
+                  key={scoreMarker.id}
+                  className={cn(
+                    "pointer-events-none absolute left-1/2 top-[18%] z-20 -translate-x-1/2 rounded-full px-1.5 py-0.5 text-[0.52rem] font-bold shadow-sm animate-in fade-in-0 zoom-in-95 duration-300 sm:text-[0.64rem]",
+                    scoreMarker.tone === "positive"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-destructive text-white",
+                  )}
+                >
+                  {scoreMarker.label}
+                </span>
               ) : null}
             </button>
           );
